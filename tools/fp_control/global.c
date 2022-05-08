@@ -45,19 +45,7 @@ int verbose = 0; //verbose is off by default
 
 static Model_t *AvailableModels[] =
 {
-	&Ufs910_1W_model,
-	&Ufs910_14W_model,
-	&UFS922_model,
-	&Fortis_model,
 	&HL101_model,
-	&VIP2_model,
-	&UFS912_model,
-	&UFC960_model,
-	&Spark_model,
-	&Adb_Box_model,
-	&Cuberevo_model,
-	&AM5XX_model,
-	&Vitamin_model,
 	NULL
 };
 
