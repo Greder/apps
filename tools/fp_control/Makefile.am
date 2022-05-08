@@ -13,11 +13,9 @@ fp_control_SOURCES = \
 	Fortis.c \
 	Hl101.c \
 	Vip2.c \
-	Homecast5101.c \
 	Spark.c \
 	Cuberevo.c \
-	Adb_Box.c \
-	Cnbox.c
+	Adb_Box.c
 
 AM_CFLAGS  = -Wall
 AM_LDFLAGS = -lrt
