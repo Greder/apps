@@ -35,7 +35,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /* Software version of fp_control, please increase on every change */
-static const char *sw_version = "1.11Audioniek 20200829.1";
+static const char *sw_version = "1.14 (Audioniek 20210928.1)";
 static eWakeupReason reason = 0;
 
 typedef struct
@@ -46,13 +46,14 @@ typedef struct
 } tArgs;
 
 time_t *theGMTTime;
-//int gmt_offset;
-char vName[129] = "Unknown";
-int Vdisplay = 0; //
-int Vdisplay_custom = 0;
-char *VtimeFormat = "Unknown";
-int Vwakeup = 5 * 60; //default wakeup decrement in minutes
+int        disp = 0; //controls screen output through -V option
+char       vName[129] = "Unknown";
+int        Vdisplay = 0; //
+int        Vdisplay_custom = 0;
+char       *VtimeFormat = "Unknown";
+int        Vwakeup = 5 * 60;  // default wakeup decrement in minutes
 const char *wakeupreason[8] = { "Unknown", "Power on", "From deep standby", "Timer", "Power switch", "Unknown", "Unknown", "Unknown" };
+char       boxName[129] = { 0 };
 
 tArgs vArgs[] =
 {
@@ -70,7 +71,7 @@ tArgs vArgs[] =
 	{ "-st", " --setWakeTime      * ", "Args: time date Format: HH:MM:SS dd-mm-YYYY\n\tSet the frontcontroller wake up time" },
 	{ "-r", "  --reboot           * ", "Args: time date Format: HH:MM:SS dd-mm-YYYY\n\tReboot receiver via fc at given time" },
 	{ "-p", "  --sleep            * ", "Args: time date Format: HH:MM:SS dd-mm-YYYY\n\tSleep receiver via fc until given time" },
-	{ "-t", "  --settext            ", "Arg : text\n\tSet text to front panel." },
+	{ "-t", "  --settext            ", "Arg : text\n\tSet text to frontpanel." },
 	{ "-l", "  --setLed             ", "Args: led on\n\tSet a led on or off" },
 	{ "-i", "  --setIcon            ", "Args: icon on\n\tSet an icon on or off" },
 	{ "-b", "  --setBrightness      ", "Arg : brightness 0..7\n\tSet display brightness" },
@@ -108,10 +109,11 @@ int usage(Context_t *context, char *prg, char *cmd)
 			}
 			if ((cmd == NULL) || (strcmp(cmd, vArgs[i].arg) == 0) || (strstr(vArgs[i].arg_long, cmd) != NULL))
 			{
-				fprintf(stderr, "%s   %s   %s\n", vArgs[i].arg, vArgs[i].arg_long, vArgs[i].arg_description);
+				printf("%s   %s   %s\n", vArgs[i].arg, vArgs[i].arg_long, vArgs[i].arg_description);
 			}
 		}
-		fprintf(stderr, "Options marked * should be the only calling argument.\n");
+		printf("Options marked * should be the only calling argument.\n");
+		printf("Time and date arguments must be in local time.\n");
 	}
 	if (((Model_t *)context->m)->Exit)
 	{
@@ -130,26 +132,33 @@ void getTimeFromArg(char *timeStr, char *dateStr, time_t *theTime)
 
 	sscanf(timeStr, "%d:%d:%d", &thetempTime.tm_hour, &thetempTime.tm_min, &thetempTime.tm_sec);
 	sscanf(dateStr, "%d-%d-%d", &thetempTime.tm_mday, &thetempTime.tm_mon, &thetempTime.tm_year);
-	//printf("%s > input: %02d:%02d:%02d %02d-%02d-%02d\n", __func__, thetempTime.tm_hour, thetempTime.tm_min, thetempTime.tm_sec, thetempTime.tm_mday, thetempTime.tm_mon, thetempTime.tm_year);
+//	printf("%s > input: %02d:%02d:%02d %02d-%02d-%02d\n", __func__, thetempTime.tm_hour, thetempTime.tm_min, thetempTime.tm_sec, thetempTime.tm_mday, thetempTime.tm_mon, thetempTime.tm_year);
 	thetempTime.tm_mon  -= 1;
  	thetempTime.tm_year -= 1900;
 
+	/* Reminder: MJD epoch is November 17th, 1858, midnight GMT
+	             Linux time_t epoch is January 1st 1970, midnight GMT
+	             Difference is 40587 days
+	 */
+
 	thetempTime.tm_isdst = -1; /* say mktime that we do not know */
-//	/* FIXME: hmm this is not a gmt or, isn't it? */
+//	/* FIXME: hmm this is not a GMT or, isn't it? */
 //	theTime = mktime(&thetempTime);
 	/* FIXED: indeed, but this one is... */
 	mjd = (int)modJulianDate(&thetempTime);
-	//printf("%s date seconds: %d (time_t)\n", __func__, mjd);
-	mjd *= 86400; // MJD * seconds per day
-	//printf("%s date seconds: %d (time_t)\n", __func__, mjd);
+//	printf("%s Date as MJD: %d\n", __func__, mjd); // (since November 17th, 1858, midnight GMT)
+	mjd -= 40587;  // convert MJD to linux epoch (since January 1st, 1970, midnight GMT)
+//	printf("%s Date as MJD (linux epoch): %d\n", __func__, mjd);
+	mjd *= 86400;  // MJD * seconds per day
+//	printf("%s Date as seconds: %d (time_t)\n", __func__, mjd);
 	mjd += thetempTime.tm_hour * 3600;
-	//printf("%s date + hour seconds: %d (time_t)\n", __func__, mjd);
+//	printf("%s date + hour (seconds): %d (time_t)\n", __func__, mjd);
 	mjd += thetempTime.tm_min * 60;
-	//printf("%s date + hour + min seconds: %d (time_t)\n", __func__, mjd);
+//	printf("%s date + hour + min (seconds): %d (time_t)\n", __func__, mjd);
 	mjd += thetempTime.tm_sec;
-	//printf("%s date + hour + min seconds: %d (time_t)\n", __func__, mjd);
+//	printf("%s date + hour + min + sec (seconds): %d (time_t)\n", __func__, mjd);
 	*theTime = mjd;
-	//printf("%s < output: %d (time_t)\n", __func__, (int)*theTime);
+//	printf("%s < output: %d (time_t)\n", __func__, (int)*theTime);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,7 +212,7 @@ void processCommand(Context_t *context, int argc, char *argv[])
 					if (((Model_t *)context->m)->GetTime(context, &theGMTTime) == 0)
 					{
 						struct tm *gmt = gmtime(&theGMTTime);
-						printf("Current front processor time: %02d:%02d:%02d %02d-%02d-%04d\n",
+						printf("Current front processor time: %02d:%02d:%02d %02d-%02d-%04d (local)\n",
 							   gmt->tm_hour, gmt->tm_min, gmt->tm_sec, gmt->tm_mday, gmt->tm_mon + 1, gmt->tm_year + 1900);
 					}
 				}
@@ -220,7 +229,7 @@ void processCommand(Context_t *context, int argc, char *argv[])
 						/* FIXME/CAUTION: assumes frontprocessor time is local and not UTC */
 						struct tm *gmt = gmtime(&theGMTTime);
 
-						printf("Setting system time to current front panel time: %02d:%02d:%02d %02d-%02d-%04d\n",
+						printf("Setting system time to current frontpanel time: %02d:%02d:%02d %02d-%02d-%04d (local)\n",
 								gmt->tm_hour, gmt->tm_min, gmt->tm_sec, gmt->tm_mday, gmt->tm_mon + 1, gmt->tm_year + 1900);
 						char cmd[50];
 						sprintf(cmd, "date -s %04d.%02d.%02d-%02d:%02d:%02d\n", gmt->tm_year + 1900, gmt->tm_mon + 1, gmt->tm_mday, gmt->tm_hour, gmt->tm_min, gmt->tm_sec);
@@ -239,7 +248,7 @@ void processCommand(Context_t *context, int argc, char *argv[])
 					{
 						struct tm *gmt = gmtime(&theGMTTime);
 
-						fprintf(stderr, "Wakeup Time: %02d:%02d:%02d %02d-%02d-%04d\n",
+						printf("Wakeup Time: %02d:%02d:%02d %02d-%02d-%04d (local)\n",
 							gmt->tm_hour, gmt->tm_min, gmt->tm_sec, gmt->tm_mday, gmt->tm_mon+1, gmt->tm_year+1900);
 					}
 				}
@@ -704,6 +713,7 @@ int getKathreinUfs910BoxType()
 {
 	char vType;
 	int vFdBox = open("/proc/boxtype", O_RDONLY);
+
 	read(vFdBox, &vType, 1);
 	close(vFdBox);
 	return vType == '0' ? 0 : vType == '1' || vType == '3' ? 1 : -1;
@@ -717,13 +727,19 @@ int getModel()
 	int vLen = -1;
 	eBoxType vBoxType = Unknown;
 
-	vFd = open("/etc/openvision/model", O_RDONLY);
+	vFd = open("/proc/stb/info/model", O_RDONLY);
 	vLen = read(vFd, vName, cSize);
 	close(vFd);
 
 	if (vLen > 0)
 	{
 		vName[vLen - 1] = '\0';
+		if (disp)
+		{
+			printf("Receiver model: %s\n", vName);
+		}
+		memcpy(boxName, vName, strlen(vName));  // save name for use elsewhere
+
 		if (!strncasecmp(vName, "ufs910", 6))
 		{
 			switch (getKathreinUfs910BoxType())
@@ -761,43 +777,42 @@ int getModel()
 		{
 			vBoxType = Ufs912;
 		}
-		else if (!strncasecmp(vName, "tf7700", 11))
+		else if (!strncasecmp(vName, "tf7700hdpvr", 11))
 		{
 			vBoxType = Tf7700;
 		}
 		else if ((!strncasecmp(vName, "hl101", 5))
-		     ||  (!strncasecmp(vName, "vip1_v1", 7)))
+		     ||  (!strncasecmp(vName, "vip1-v1", 7)))
 		{
 			vBoxType = Hl101;
 		}
-		else if ((!strncasecmp(vName, "vip1_v2", 7))
+		else if ((!strncasecmp(vName, "vip1-v2", 7))
 		     ||  (!strncasecmp(vName, "vip2", 4)))
 		{
 			vBoxType = Vip2;
 		}
-		else if ((!strncasecmp(vName, "fortis_hdbox", 5))
-		     ||  (!strncasecmp(vName, "octagon1008", 11))
-		     ||  (!strncasecmp(vName, "atevio7500", 10))
+		else if ((!strncasecmp(vName, "fs9000", 6))
+		     ||  (!strncasecmp(vName, "hs9510", 6))
+		     ||  (!strncasecmp(vName, "hs8200", 6))
 		     ||  (!strncasecmp(vName, "hs7110", 6))
 		     ||  (!strncasecmp(vName, "hs7420", 6))
 		     ||  (!strncasecmp(vName, "hs7810a", 7))
 		     ||  (!strncasecmp(vName, "hs7119", 6))
 		     ||  (!strncasecmp(vName, "hs7429", 6))
 		     ||  (!strncasecmp(vName, "hs7819", 6))
-		     ||  (!strncasecmp(vName, "forever_3434hd", 6))
-		     ||  (!strncasecmp(vName, "forever_nanosmart", 6))
+		     ||  (!strncasecmp(vName, "dp2010", 6))
+		     ||  (!strncasecmp(vName, "dp6010", 6))
 		     ||  (!strncasecmp(vName, "fx6010", 6))
-		     ||  (!strncasecmp(vName, "forever_9898hd", 6))
+		     ||  (!strncasecmp(vName, "dp7000", 6))
 		     ||  (!strncasecmp(vName, "dp7001", 6))
-		     ||  (!strncasecmp(vName, "forever_2424hd", 6))
+		     ||  (!strncasecmp(vName, "dp7050", 6))
 		     ||  (!strncasecmp(vName, "ep8000", 6))
 		     ||  (!strncasecmp(vName, "epp8000", 7))
 		     ||  (!strncasecmp(vName, "gpv8000", 7)))
 		{
 			vBoxType = Fortis;
 		}
-		else if ((!strncasecmp(vName, "atemio520", 9))
-		     ||  (!strncasecmp(vName, "atemio530", 9)))
+		else if (!strncasecmp(vName, "atemio520", 9))
 		{
 			vBoxType = AM5xx;
 		}
@@ -812,13 +827,13 @@ int getModel()
 			vBoxType = Adb_Box;
 		}
 		else if ((!strncasecmp(vName, "cuberevo", 8))
-		     ||  (!strncasecmp(vName, "cuberevo_mini", 13))
-		     ||  (!strncasecmp(vName, "cuberevo_mini2", 14))
-		     ||  (!strncasecmp(vName, "cuberevo_mini_fta", 17))
-		     ||  (!strncasecmp(vName, "cuberevo_250hd", 14))
-		     ||  (!strncasecmp(vName, "cuberevo_2000hd", 15))
-		     ||  (!strncasecmp(vName, "cuberevo_9500hd", 15))
-		     ||  (!strncasecmp(vName, "cuberevo_3000hd", 14)))
+		     ||  (!strncasecmp(vName, "cuberevo-mini", 13))
+		     ||  (!strncasecmp(vName, "cuberevo-mini2", 14))
+		     ||  (!strncasecmp(vName, "cuberevo-mini-fta", 17))
+		     ||  (!strncasecmp(vName, "cuberevo-250hd", 14))
+		     ||  (!strncasecmp(vName, "cuberevo-2000hd", 15))
+		     ||  (!strncasecmp(vName, "cuberevo-9500hd", 15))
+		     ||  (!strncasecmp(vName, "cuberevo-3000hd", 14)))
 		{
 			vBoxType = Cuberevo;
 		}
@@ -826,13 +841,15 @@ int getModel()
 		{
 			vBoxType = Vitamin_HD5000;
 		}
+		else if ((!strncasecmp(vName, "opt9600", 7))
+		     ||  (!strncasecmp(vName, "opt9600mini", 11))
+		     ||  (!strncasecmp(vName, "opt9600prima", 12)))
+		{
+			vBoxType = Opt9600;
+		}
 		else
 		{
 			vBoxType = Unknown;
-		}
-		if (disp)
-		{
-			printf("Receiver: %s\n\n", vName);
 		}
 	}
 	return vBoxType;

@@ -41,11 +41,23 @@ char *sDisplayStd = "%a %d %H:%M:%S";
 #define WAS_TIMER_WAKEUP "/proc/stb/fp/was_timer_wakeup"
 
 #define E2_WAKEUP_TIME_PROC
-int verbose = 0; //verbose is off by default
 
 static Model_t *AvailableModels[] =
 {
+	&Ufs910_1W_model,
+	&Ufs910_14W_model,
+	&UFS922_model,
+	&Fortis_model,
 	&HL101_model,
+	&VIP2_model,
+	&UFS912_model,
+	&UFC960_model,
+	&Spark_model,
+	&Adb_Box_model,
+	&Cuberevo_model,
+	&AM5XX_model,
+	&Vitamin_model,
+	&Opt9600_model,
 	NULL
 };
 
@@ -82,9 +94,9 @@ static time_t read_e2_timers(time_t curTime)
 	char line[1000];
 	time_t recordTime = LONG_MAX;
 	FILE *fd = fopen(E2TIMERSXML, "r");
-	printf("Getting 1st Enigma2 timer");
 	if (fd > 0)
 	{
+		printf("Getting 1st Enigma2 timer");
 		while (fgets(line, 999, fd) != NULL)
 		{
 			line[999] = '\0';
@@ -109,7 +121,7 @@ static time_t read_e2_timers(time_t curTime)
 		printf(" - Done\n");
 		fclose(fd);
 	}
-	else
+	else if (disp)
 	{
 		printf(" - Error reading %s\n", E2TIMERSXML);
 	}
@@ -122,9 +134,9 @@ static time_t read_neutrino_timers(time_t curTime)
 	char line[1000];
 	time_t recordTime = LONG_MAX;
 	FILE *fd = fopen(NEUTRINO_TIMERS, "r");
-	printf("Getting 1st neutrino timer");
 	if (fd > 0)
 	{
+		printf("Getting 1st neutrino timer");
 		while (fgets(line, 999, fd) != NULL)
 		{
 			line[999] = '\0';
@@ -143,8 +155,10 @@ static time_t read_neutrino_timers(time_t curTime)
 		printf(" - Done\n");
 		fclose(fd);
 	}
-	else
+	else if (disp)
+	{
 		printf(" - Error reading %s\n", NEUTRINO_TIMERS);
+	}
 	if (recordTime != LONG_MAX)
 	{
 		int wakeupDecrement = Vwakeup;
@@ -235,8 +249,9 @@ int syncWasTimerWakeup(eWakeupReason reason)
 time_t read_timers_utc(time_t curTime)
 {
 	time_t wakeupTime = LONG_MAX;  // flag no timer read (yet)
+
 	wakeupTime = read_e2_timers(curTime);  // get next e2timer
-	if (wakeupTime == LONG_MAX) // if none
+	if (wakeupTime == LONG_MAX)  // if none
 	{
 		wakeupTime = read_neutrino_timers(curTime);  // try neutrino timer
 	}
@@ -263,8 +278,13 @@ time_t read_fake_timer_utc(time_t curTime)
 }
 /* ******************************************** */
 
+/********************************************
+ *
+ * Convert struct tm to MJD
+ *
+ */
 double modJulianDate(struct tm *theTime)
-{ // struct tm (date) -> MJD since epoch
+{  // struct tm (date) -> MJD since epoch (since November 17th 1858, midnight GMT)
 	double date;
 	int month;
 	int day;
@@ -273,10 +293,11 @@ double modJulianDate(struct tm *theTime)
 	year  = theTime->tm_year + 1900;
 	month = theTime->tm_mon + 1;
 	day   = theTime->tm_mday;
-	date = day - 32076 +
-		   1461 * (year + 4800 + (month - 14) / 12) / 4 +
-		   367 * (month - 2 - (month - 14) / 12 * 12) / 12 -
-		   3 * ((year + 4900 + (month - 14) / 12) / 100) / 4;
+	date  = day
+	      - 32076
+		  + 1461 * (year + 4800 + (month - 14) / 12) / 4
+	      +  367 * (month - 2 - (month - 14) / 12 * 12) / 12
+	      -    3 * ((year + 4900 + (month - 14) / 12) / 100) / 4;
 	date += (theTime->tm_hour + 12.0) / 24.0;
 	date += (theTime->tm_min) / 1440.0;
 	date += (theTime->tm_sec) / 86400.0;
@@ -284,6 +305,11 @@ double modJulianDate(struct tm *theTime)
 	return date;
 }
 
+/********************************************
+ *
+ * Get UTC offset in seconds
+ *
+ */
 int get_GMT_offset(struct tm theTime)
 {
 	time_t theoffsetTime;
@@ -291,7 +317,6 @@ int get_GMT_offset(struct tm theTime)
 	int gmt_offset;
 
 	// Calculate time_t of input time theTime
-//	theinputTime = (((int)modJulianDate(&theTime) & 0xffff) - 40587) * 86400;  // mjd starts on midnight 17-11-1858 which is 40587 days before unix epoch
 	theinputTime = ((int)modJulianDate(&theTime) - 40587) * 86400;  // mjd starts on midnight 17-11-1858 which is 40587 days before unix epoch
 	theinputTime += theTime.tm_hour * 3600;
 	theinputTime += theTime.tm_min * 60;
@@ -303,6 +328,64 @@ int get_GMT_offset(struct tm theTime)
 
 	gmt_offset = theinputTime - theoffsetTime;
 	return gmt_offset;
+}
+
+/********************************************
+ *
+ * Get UTC offset in seconds
+ *
+ */
+int getUTCoffset(void)
+{
+	time_t curTime;
+	struct tm *ts_gmt;
+	int    gmt_offset;
+
+	time(&curTime); // get system time in UTC
+	ts_gmt = gmtime(&curTime);
+	gmt_offset = get_GMT_offset(*ts_gmt);
+#if 0
+	if (disp)
+	{
+		printf("Current system time: %02d:%02d:%02d %02d-%02d-%04d (UTC, offset %+d seconds)\n",
+			ts_gmt->tm_hour, ts_gmt->tm_min, ts_gmt->tm_sec,
+			ts_gmt->tm_mday, ts_gmt->tm_mon + 1, ts_gmt->tm_year + 1900, gmt_offset);
+	}
+#endif
+	return gmt_offset;
+}
+
+/********************************************
+ *
+ * Set UTC offset in /proc/stb/fp/rtc_offset
+ *
+ */
+int setUTCoffset(int UTC_offset)
+{
+	int proc_fs;
+	FILE *proc_fs_file;
+
+	proc_fs_file = fopen(cRTC_OFFSET_FILE, "w");
+	if (proc_fs_file == NULL)
+	{
+		perror("Open rtc_offset");
+		return -1;
+	}
+	else
+	{
+		proc_fs = fprintf(proc_fs_file, "%d", UTC_offset);
+		if (proc_fs < 0)
+		{
+			perror("Write rtc_offset");
+			return -1;
+		}
+		fclose(proc_fs_file);
+		if (disp)
+		{
+			printf("Note: /proc/stb/fp/rtc_offset set to: %+d seconds.\n", UTC_offset);
+		}
+	}
+	return 0;
 }
 
 #if 0
@@ -351,11 +434,13 @@ int searchModel(Context_t *context, eBoxType type)
 {
 	int i;
 	for (i = 0; AvailableModels[i] != NULL; i++)
+	{
 		if (AvailableModels[i]->Type == type)
 		{
 			context->m = AvailableModels[i];
 			return 0;
 		}
+	}
 	return -1;
 }
 
@@ -429,3 +514,4 @@ int checkConfig(int *display, int *display_custom, char **timeFormat, int *wakeu
 	fclose(fd_config);
 	return 0;
 }
+// vim:ts=4

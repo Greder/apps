@@ -26,6 +26,8 @@
  * 20130930 Audioniek       Fortis specific usage added.
  * 20170103 Audioniek       VFDTEST (-ms command) fixed.
  * 20170127 Audioniek       Get version fixed.
+ * 20210403 Audioniek       -c now uses actual values for display width,
+ *                          led count and icon count.
  *
  ****************************************************************************/
 
@@ -49,7 +51,7 @@
 static int setText(Context_t *context, char *theText);
 static int Clear(Context_t *context);
 static int setIcon(Context_t *context, int which, int on);
-//extern int gmt_offset;
+// extern int gmt_offset;
 
 /* ******************* constants ************************ */
 
@@ -91,7 +93,7 @@ tArgs vFArgs[] =
 	{ "-sst", "--setSystemTime    * ", "Args: None        Set front processor time to system time" },
 	{ "-p", "  --sleep            * ", "Args: time date   Format: HH:MM:SS dd-mm-YYYY" },
 	{ "", "                         ", "      Reboot receiver via fp at given time" },
-	{ "-t", "  --settext            ", "Args: text        Set text to front panel" },
+	{ "-t", "  --settext            ", "Args: text        Set text to frontpanel" },
 	{ "-l", "  --setLed             ", "Args: LED# int    LED#: int=brightness (0..31)" },
 	{ "-i", "  --setIcon            ", "Args: icon# 1|0   Set an icon on or off" },
 	{ "-b", "  --setBrightness      ", "Arg : 0..7        Set display brightness" },
@@ -143,8 +145,8 @@ unsigned long calcGetNuvotonTime(char *nuvotonTimeString)
 }
 
 /* Calculate the time value which we can pass to
- * the nuvoton fp. it is a mjd time (mjd=modified
- * julian date). mjd is relative to gmt so theTime
+ * the nuvoton fp. It is an MJD time (MJD=Modified
+ * Julian Date). mjd is relative to gmt so theTime
  * must be in GMT/UTC.
  */
 void calcSetNuvotonTime(time_t theTime, char *destString)
@@ -153,7 +155,11 @@ void calcSetNuvotonTime(time_t theTime, char *destString)
 	int mjd;
 
 	now_tm = gmtime(&theTime);
+	printf("Time to set: %02d:%02d:%02d %02d-%02d-%04d (local)\n", now_tm->tm_hour, now_tm->tm_min, now_tm->tm_sec,
+		now_tm->tm_mday, now_tm->tm_mon + 1, now_tm->tm_year + 1900);
+	
 	mjd = (int)modJulianDate(now_tm);
+	printf("Converted to: MJD = %d %02d-%02d-%02d (local)\n", mjd, now_tm->tm_hour, now_tm->tm_min, now_tm->tm_sec);
 	destString[0] = (mjd >> 8);
 	destString[1] = (mjd & 0xff);
 	destString[2] = now_tm->tm_hour;
@@ -184,8 +190,8 @@ static int usage(Context_t *context, char *prg_name, char *cmd_name)
 {
 	int i;
 
-	fprintf(stderr, "Usage:\n\n");
-	fprintf(stderr, "%s argument [optarg1] [optarg2]\n", prg_name);
+	printf("Usage:\n\n");
+	printf("%s argument [optarg1] [optarg2]\n", prg_name);
 	for (i = 0; ; i++)
 	{
 		if (vFArgs[i].arg == NULL)
@@ -197,13 +203,12 @@ static int usage(Context_t *context, char *prg_name, char *cmd_name)
 			fprintf(stderr, "%s   %s   %s\n", vFArgs[i].arg, vFArgs[i].arg_long, vFArgs[i].arg_description);
 		}
 	}
-	fprintf(stderr, "Options marked * should be the only calling argument.\n");
+	printf("Options marked * should be the only calling argument.\n");
 	return 0;
 }
 
 static int setTime(Context_t *context, time_t *theGMTTime)
-{
-	// -s command
+{  // -s command
 	struct nuvoton_ioctl_data vData;
 
 	calcSetNuvotonTime(*theGMTTime, vData.u.time.time);
@@ -216,8 +221,7 @@ static int setTime(Context_t *context, time_t *theGMTTime)
 }
 
 static int getTime(Context_t *context, time_t *theGMTTime)
-{
-	// -g command
+{  // -g command
 	char fp_time[8];
 
 	if (ioctl(context->fd, VFDGETTIME, &fp_time) < 0)
@@ -239,8 +243,7 @@ static int getTime(Context_t *context, time_t *theGMTTime)
 }
 
 static int setSTime(Context_t *context, time_t *theGMTTime)
-{
-	// -sst command
+{  // -sst command
 	time_t curTime;
 	char fp_time[8];
 	time_t curTimeFP;
@@ -288,8 +291,7 @@ static int setSTime(Context_t *context, time_t *theGMTTime)
 }
 
 static int setTimer(Context_t *context, time_t *theGMTTime)
-{
-	// -e command, OK
+{  // -e command, OK
 	time_t curTime;
 	time_t curTimeFP = 0;
 	time_t wakeupTime;
@@ -374,8 +376,7 @@ static int setTimer(Context_t *context, time_t *theGMTTime)
 }
 
 static int getWTime(Context_t *context, time_t *theGMTTime)
-{
-	//-gw command: VFDGETWAKEUPTIME not supported by older nuvotons
+{  //-gw command: VFDGETWAKEUPTIME not supported by older nuvotons
 	char fp_time[5];
 	time_t iTime;
 
@@ -401,8 +402,7 @@ static int getWTime(Context_t *context, time_t *theGMTTime)
 }
 
 static int setWTime(Context_t *context, time_t *theGMTTime)
-{
-	//-st command
+{  //-st command
 	struct nuvoton_ioctl_data vData;
 	struct tm *swtm;
 	int gmt_offset;
@@ -443,8 +443,7 @@ static int setWTime(Context_t *context, time_t *theGMTTime)
 }
 
 static int shutdown(Context_t *context, time_t *shutdownTimeGMT)
-{
-	// -d command to check
+{  // -d command to check
 	time_t curTime;
 
 	/* shutdown immediately */
@@ -466,8 +465,7 @@ static int shutdown(Context_t *context, time_t *shutdownTimeGMT)
 }
 
 static int reboot(Context_t *context, time_t *rebootTimeGMT)
-{
-	//-r command to check
+{  //-r command to check
 	time_t curTime;
 	struct nuvoton_ioctl_data vData;
 
@@ -488,8 +486,7 @@ static int reboot(Context_t *context, time_t *rebootTimeGMT)
 }
 
 static int Sleep(Context_t *context, time_t *wakeUpGMT)
-{
-	// -p command
+{  // -p command
 	time_t curTime;
 	int gmt_offset;
 	struct tm *ts;
@@ -562,21 +559,17 @@ static int Sleep(Context_t *context, time_t *wakeUpGMT)
 }
 
 static int setText(Context_t *context, char *theText)
-{
-	// -t command
+{  // -t command
 	char vHelp[128];
 
-//	strncpy(vHelp, theText, cMAXCharsFortis);
 	strncpy(vHelp, theText, 64);
-//	vHelp[cMAXCharsFortis] = '\0';
 	vHelp[64] = '\0';
 	write(context->fd, vHelp, strlen(vHelp));
 	return 0;
 }
 
 static int setLed(Context_t *context, int which, int level)
-{
-	// -l command
+{  // -l command
 	struct nuvoton_ioctl_data vData;
 
 	if (level < 0 || level > 31)
@@ -594,10 +587,10 @@ static int setLed(Context_t *context, int which, int level)
 		}
 		else
 		{
-			vData.u.led.led_nr = 1 << which; //LED# is bitwise in Fortis
+			vData.u.led.led_nr = 1 << which;  // LED# is bitwise in Fortis
 		}
 	}
-	else // allow more than one led to be set at once
+	else  // allow more than one led to be set at once
 	{
 		vData.u.led.led_nr = which;
 	}
@@ -609,13 +602,12 @@ static int setLed(Context_t *context, int which, int level)
 		perror("SetLED");
 		return -1;
 	}
-	usleep(100000); //allow frontprocessor to keep up
+	usleep(100000);  // allow frontprocessor to keep up
 	return 0;
 }
 
 static int setIcon(Context_t *context, int which, int on)
-{
-	// -i command
+{  // -i command
 	struct nuvoton_ioctl_data vData;
 
 	vData.u.icon.icon_nr = which;
@@ -630,8 +622,7 @@ static int setIcon(Context_t *context, int which, int on)
 }
 
 static int setBrightness(Context_t *context, int brightness)
-{
-	//-b command, OK
+{  //-b command
 	struct nuvoton_ioctl_data vData;
 
 	if (brightness < 0 || brightness > 7)
@@ -650,25 +641,94 @@ static int setBrightness(Context_t *context, int brightness)
 }
 
 static int Clear(Context_t *context)
-{
-	// -c command
+{  // -c command
 	int i;
+	int vFd = -1;
+	int disp_size = 0;
+	int icon_num = 0;
+	int led_num = 0;
+	char vName[129] = { 0 };
+	int vLen = -1;
 
-	setText(context, "            ");  //show no text
-	for (i = 0; i <= 7; i++)
+	vFd = open("/proc/stb/info/model", O_RDONLY);
+	vLen = read(vFd, vName, sizeof(vName) - 1);
+	close(vFd);
+
+	vName[vLen - 1] = '\0';
+	if ((strcmp(vName, "hdbox") == 0) || (strcmp(vName, "fs9000") == 0))
 	{
-		setLed(context, i, 0); //all leds off
+		disp_size = 12;
+		icon_num = 39;
+		led_num = 8;
 	}
-	for (i = 1; i < 40; i++) //all icons off
+	else if ((strcmp(vName, "octagon1008") == 0) || (strcmp(vName, "hs9510") == 0))
 	{
-		setIcon(context, i, 0);
+		disp_size = 8;
+		icon_num = 28;
+		led_num = 2;
+	}
+	else if ((strcmp(vName, "atevio7500") == 0) || (strcmp(vName, "hs8200") == 0))
+	{
+		disp_size = 12;
+		icon_num = 22;
+		led_num = 8;
+	}
+	else if ((strcmp(vName, "hs7420") == 0)
+	||       (strcmp(vName, "hs7429") == 0)
+	||       (strcmp(vName, "dp2010") == 0)
+	||       (strcmp(vName, "dp7000") == 0)
+	||       (strcmp(vName, "ep8000") == 0)
+	||       (strcmp(vName, "epp8000") == 0)
+	||       (strcmp(vName, "gpv8000") == 0))
+	{
+		disp_size = 8;
+		icon_num = 4;
+		led_num = 1;
+	}
+	else if ((strcmp(vName, "hs7119") == 0)
+	||       (strcmp(vName, "hs7810a") == 0)
+	||       (strcmp(vName, "hs7819") == 0)
+	||       (strcmp(vName, "dp6010") == 0)
+	||       (strcmp(vName, "fx6010") == 0)
+	||       (strcmp(vName, "dp7001") == 0)
+	||       (strcmp(vName, "dp7050") == 0))
+	{
+		disp_size = 4;
+		icon_num = 0;
+		led_num = 2;
+	}
+	else if (strcmp(vName, "hs7110") == 0)
+	{
+		disp_size = 0;
+		icon_num = 0;
+		led_num = 1;
+	}
+	if (disp_size)
+	{
+		memset (vName, 0x20, sizeof(vName));
+		vName[disp_size] = '\0';
+		setText(context, vName);   // show no text
+	}
+	if (led_num)
+	{
+		for (i = 0; i <= led_num; i++)
+		{
+			setLed(context, i, 0);  // all leds off
+		}
+	}
+	if (icon_num)
+	{
+		for (i = 1; i <= icon_num; i++)  // all icons off
+		{
+			setIcon(context, i, 0);
+		}
 	}
 	return 0;
 }
 
 static int setLight(Context_t *context, int on)
 {
-	// -L command, OK
+	// -L command
 	struct nuvoton_ioctl_data vData;
 
 	vData.u.light.onoff = on;
@@ -683,7 +743,7 @@ static int setLight(Context_t *context, int on)
 
 static int getWakeupReason(Context_t *context, eWakeupReason *reason)
 {
-	//-w command, OK
+	// -w command
 	int mode = -1;
 
 	if (ioctl(context->fd, VFDGETWAKEUPMODE, &mode) < 0)
@@ -691,21 +751,21 @@ static int getWakeupReason(Context_t *context, eWakeupReason *reason)
 		perror("Get wakeup reason");
 		return -1;
 	}
-	if (mode != '\0')  /* if we get a fp wake up reason */
+	if (mode != '\0')  // if we get a fp wake up reason
 	{
-		*reason = mode & 0xff; //get LS byte
+		*reason = mode & 0xff;  // get LS byte
 	}
 	else
 	{
 		fprintf(stderr, "Error reading wakeup mode from frontprocessor\n");
-		*reason = 0;  //echo unknown
+		*reason = 0;  // echo unknown
 	}
 	return 0;
 }
 
 static int getVersion(Context_t *context, int *version)
 {
-	//-v command
+	// -v command
 	int fp_version;
 	int resellerID;
 
@@ -714,7 +774,7 @@ static int getVersion(Context_t *context, int *version)
 		perror("Get version info");
 		return -1;
 	}
-	if (fp_version != '\0')  /* if the version info is OK */
+	if (fp_version != '\0')  // if the version info is OK
 	{
 		*version = fp_version;
 	}
@@ -722,7 +782,7 @@ static int getVersion(Context_t *context, int *version)
 	{
 		*version = -1;
 	}
-	if (resellerID != '\0')  /* if the reseller info is OK */
+	if (resellerID != '\0')  // if the reseller info is OK
 	{
 		printf("Reseller ID is %08X\n", resellerID);
 	}
@@ -735,7 +795,7 @@ static int getVersion(Context_t *context, int *version)
 
 static int setTimeMode(Context_t *context, int timemode)
 {
-	// -tm command, OK
+	// -tm command
 	struct nuvoton_ioctl_data vData;
 
 	vData.u.timemode.timemode = timemode;
@@ -751,11 +811,11 @@ static int setTimeMode(Context_t *context, int timemode)
 #if defined MODEL_SPECIFIC
 static int modelSpecific(Context_t *context, char len, unsigned char *data)
 {
-	//-ms command
+	// -ms command
 	int i, res;
 	char testdata[18];
 
-	testdata[0] = len; // set length
+	testdata[0] = len;  //  set length
 	
 	printf("nuvoton ioctl: VFDTEST (0x%08x) SOP CMD=", VFDTEST);
 	for (i = 0; i < len; i++)
@@ -767,7 +827,7 @@ static int modelSpecific(Context_t *context, char len, unsigned char *data)
 
 	memset(data, 0, 18);
 
-//	setMode(context->fd); //set mode 1
+//	setMode(context->fd);  // set mode 1
 
 	res = (ioctl(context->fd, VFDTEST, &testdata) < 0);
 
@@ -780,7 +840,7 @@ static int modelSpecific(Context_t *context, char len, unsigned char *data)
 	{
 		for (i = 0; i < ((testdata[1] == 1) ? 11 : 2); i++)
 		{
-			data[i] = testdata[i]; //return values
+			data[i] = testdata[i];  // return values
 		}
 	}
 	return testdata[0];
@@ -801,7 +861,7 @@ static int Exit(Context_t *context)
 
 Model_t Fortis_model =
 {
-	.Name             = "Fortis front panel control utility",
+	.Name             = "Fortis frontpanel control utility",
 	.Type             = Fortis,
 	.Init             = init,
 	.Clear            = Clear,
@@ -832,3 +892,4 @@ Model_t Fortis_model =
 #endif
 	.Exit             = Exit
 };
+// vim:ts=4
